@@ -133,6 +133,8 @@ class Horn2Transitions:
         self.index += 1
         if is_bool(var):
             return Bool("%s%d" % (prefix, self.index))
+        if is_bv(var):
+            return BitVec("%s%d" % (prefix, self.index), var.size())
         return Int("%s%d" % (prefix, self.index))
 
     def get_vars(self, f, rs=[]):
@@ -251,6 +253,8 @@ class MiniIC3:
 
     # Check if there are two states next to each other that have the same clauses.
     def is_valid(self):
+        if verbose > 1:
+            print ('### Rule: Check Unreachable ###')
         i = 1
         while i + 1 < len(self.states):
             if not (self.states[i].R - self.states[i+1].R):
@@ -260,47 +264,70 @@ class MiniIC3:
 
     def value2literal(self, m, x):
         value = m.eval(x)
+        print('value to project: ', value)
         if is_true(value):
             return x
         if is_false(value):
             return Not(x)
+        if is_bv_value(value):
+            return Bool("a.%s" % x)
+            # return And(x == value)
         return None
 
     def values2literals(self, m, xs):
         p = [self.value2literal(m, x) for x in xs]
+        print ('p: ', p)
         return [x for x in p if x is not None]
 
+    # Concrete projection of variables
     def project0(self, m):
         return self.values2literals(m, self.x0)
-
+    # Concrete projection of inputs
     def projectI(self, m):
         return self.values2literals(m, self.inputs)
-
+    # Concrete projection of primes
     def projectN(self, m):
         return self.values2literals(m, self.xn)
 
     # Determine if there is a cube for the current state 
     # that is potentially reachable.
     def unfold(self):
+        if verbose > 1:
+            print ('### Rule: Candidate ###')
+            print ('s_bad: ', self.s_bad)
         core = []
         self.s_bad.push()
         R = self.R(len(self.states)-1)
         self.s_bad.add(R)
+        if verbose > 1:
+            print ('R: ', R)
+            print ('s_bad: ', self.s_bad)
         is_sat = self.s_bad.check()
+        if verbose > 1:
+            print ('is sat: ', is_sat)
         if is_sat == sat:
            m = self.s_bad.model()
            cube = self.project0(m)
            props = cube + self.projectI(m)
+           if verbose > 1:
+               print ('found model: ', m)
+               print ('concrete projection: ', cube)
+               print ('props: ', props)
            self.s_good.push()
            self.s_good.add(R)
+           if verbose > 1:
+               print ('s_good: ', self.s_good)
+               print ('s_good R: ', R)
            is_sat2 = self.s_good.check(props)
            assert is_sat2 == unsat
            core = self.s_good.unsat_core()
+           print('core: ', core)
            core = [c for c in core if c in set(cube)]
            self.s_good.pop()
         self.s_bad.pop()
         if verbose > 1:
-            print ('unfold with R: ', R)
+            print('s_bad: ', self.s_bad)
+            print('core: ', core)
         return is_sat, core
 
     # Block a cube by asserting the clause corresponding to its negation
@@ -331,7 +358,7 @@ class MiniIC3:
         self.push_heap(Goal(self.next(s0), None, f0))
         while self.goals:
             f, g = heapq.heappop(self.goals)
-            sys.stdout.write("%d." % f)
+            sys.stdout.write("check inductive at level: %d." % f)
             sys.stdout.flush()
             # Not(g.cube) is f-1 invariant
             if f == 0:
@@ -360,6 +387,7 @@ class MiniIC3:
             core = s.unsat_core()
             if not check_disjoint(self.init, self.prev(And(core))):
                 return core, f
+        print ('in generalization: ', cube)
         return cube, f
 
     # Check if the negation of cube is inductive at level f
@@ -388,10 +416,10 @@ class MiniIC3:
                 return inv
             is_sat, cube = self.unfold()
             if verbose > 1:
-                print ("level ", level, ": ",  inv)
+                print ('level: ', level)
             if is_sat == unsat:
                level += 1
-               print("Unfold %d" % level)
+               print("### Rule: Unfold to level %d" % level)
                sys.stdout.flush()
                self.add_solver()
             elif is_sat == sat:
@@ -414,7 +442,7 @@ def test(file):
         print ('xs: ', h2t.xs)
         print ('inputs: ', h2t.inputs)
         print ('xns: ', h2t.xns)
-        print ('#################################')
+        print ('#################################\n')
     result = mp.run()    
     if isinstance(result, Goal):
        g = result
@@ -435,4 +463,5 @@ def test(file):
 # test("data/horn5.smt2")
 # test("data/ic3-hari.smt2")
 test("data/ic3-joseph.smt2")
+# test("data/ic3-joseph-bv.smt2")
 # test("data/horn6.smt2") # takes long time to finish
