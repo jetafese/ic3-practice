@@ -161,12 +161,16 @@ def fd_solver():
 
 # negate, avoid double negation
 def negate(f):
+    if verbose > 1:
+        print('negate: ', f)
     if is_not(f):
         return f.arg(0)
     else:
         return Not(f)
 
 def cube2clause(cube):
+    if verbose > 1:
+        print('cube2clause: ', cube)
     return Or([negate(f) for f in cube])
 
 class State:
@@ -257,6 +261,10 @@ class MiniIC3:
             print ('### Rule: Check Unreachable ###')
         i = 1
         while i + 1 < len(self.states):
+            if verbose > 1:
+                print('check ', i, ' and ', i+1, ': ', self.states[i].R - self.states[i+1].R)
+                print(i, ': ', self.states[i].R)
+                print(i+1, ': ', self.states[i+1].R)
             if not (self.states[i].R - self.states[i+1].R):
                return And(prune(self.states[i].R))
             i += 1
@@ -264,7 +272,8 @@ class MiniIC3:
 
     def value2literal(self, m, x):
         value = m.eval(x)
-        print('value to project: ', value)
+        if verbose > 1:
+            print('value to project: ', value)
         if is_true(value):
             return x
         if is_false(value):
@@ -276,7 +285,8 @@ class MiniIC3:
 
     def values2literals(self, m, xs):
         p = [self.value2literal(m, x) for x in xs]
-        print ('p: ', p)
+        if verbose > 1:
+            print ('values2literals: ', p)
         return [x for x in p if x is not None]
 
     # Concrete projection of variables
@@ -292,9 +302,6 @@ class MiniIC3:
     # Determine if there is a cube for the current state 
     # that is potentially reachable.
     def unfold(self):
-        if verbose > 1:
-            print ('### Rule: Candidate ###')
-            print ('s_bad: ', self.s_bad)
         core = []
         self.s_bad.push()
         R = self.R(len(self.states)-1)
@@ -306,24 +313,28 @@ class MiniIC3:
         if verbose > 1:
             print ('is sat: ', is_sat)
         if is_sat == sat:
-           m = self.s_bad.model()
-           cube = self.project0(m)
-           props = cube + self.projectI(m)
-           if verbose > 1:
-               print ('found model: ', m)
-               print ('concrete projection: ', cube)
-               print ('props: ', props)
-           self.s_good.push()
-           self.s_good.add(R)
-           if verbose > 1:
-               print ('s_good: ', self.s_good)
-               print ('s_good R: ', R)
-           is_sat2 = self.s_good.check(props)
-           assert is_sat2 == unsat
-           core = self.s_good.unsat_core()
-           print('core: ', core)
-           core = [c for c in core if c in set(cube)]
-           self.s_good.pop()
+            if verbose > 1:
+                print ('### Rule: Candidate ###')
+                print ('s_bad: ', self.s_bad)
+            m = self.s_bad.model()
+            cube = self.project0(m)
+            props = cube + self.projectI(m)
+            if verbose > 1:
+                print ('found model: ', m)
+                print ('concrete projection: ', cube)
+                print ('props: ', props)
+            self.s_good.push()
+            self.s_good.add(R)
+            if verbose > 1:
+                print ('s_good: ', self.s_good)
+                print ('s_good R: ', R)
+            is_sat2 = self.s_good.check(props)
+            assert is_sat2 == unsat
+            core = self.s_good.unsat_core()
+            if verbose > 1:
+                print('core: ', core)
+            core = [c for c in core if c in set(cube)]
+            self.s_good.pop()
         self.s_bad.pop()
         if verbose > 1:
             print('s_bad: ', self.s_bad)
@@ -333,6 +344,10 @@ class MiniIC3:
     # Block a cube by asserting the clause corresponding to its negation
     def block_cube(self, i, cube):
         self.assert_clause(i, cube2clause(cube))
+        if verbose > 1:
+            print('### Rule: Push ###')
+            print('block_cube: ', cube, ', until frame: ', i)
+            print('     states: ', [x.R for x in self.states])
 
     # Add a clause to levels 0 until i
     def assert_clause(self, i, clause):
@@ -356,9 +371,10 @@ class MiniIC3:
     # not(s0) is f0-1 inductive
     def ic3_blocked(self, s0, f0):
         self.push_heap(Goal(self.next(s0), None, f0))
+        # print('ic3_blocked with queue: ', [(x[0], x[1].cube) for x in self.goals])
         while self.goals:
             f, g = heapq.heappop(self.goals)
-            sys.stdout.write("check inductive at level: %d." % f)
+            sys.stdout.write("check inductive at level: %d. \n" % f)
             sys.stdout.flush()
             # Not(g.cube) is f-1 invariant
             if f == 0:
@@ -369,10 +385,13 @@ class MiniIC3:
                self.block_cube(f, self.prev(cube))
                if f < f0:
                   self.push_heap(Goal(g.cube, g.parent, f + 1))
+                  print(' ### Rule: ReQueue push in unsat (c, p, l): ', g.cube, g.parent, f + 1)
             elif is_sat == sat:
+               print(' push in sat (c, p, l): ', cube, g, f - 1)
                self.push_heap(Goal(cube, g, f - 1))
                self.push_heap(g)
             else:
+               print('  push nothing')
                return is_sat
         print("")
         return None
@@ -387,14 +406,24 @@ class MiniIC3:
             core = s.unsat_core()
             if not check_disjoint(self.init, self.prev(And(core))):
                 return core, f
-        print ('in generalization: ', cube)
+        if verbose > 1:
+            print ('### Rule: New Lemma with cube : ', cube)
         return cube, f
 
     # Check if the negation of cube is inductive at level f
     def is_inductive(self, f, cube):
         s = self.states[f - 1].solver
+        if verbose > 1:
+            print('is_inductive called with f: ', f, ' and g: ', cube)
+            print('     R: ', self.states[f-1].R)
+            print('     solver: ', s)
         s.push()
-        s.add(self.prev(Not(And(cube))))
+        prev = self.prev(Not(And(cube)))
+        s.add(prev)
+        # s.add(self.prev(Not(And(cube))))
+        if verbose > 1:
+            print('     prev: ', self.prev(Not(And(cube))))
+            print('     solver: ', s)
         is_sat = s.check(cube)
         if is_sat == sat:
            m = s.model()
@@ -403,6 +432,8 @@ class MiniIC3:
            cube = self.next(self.minimize_cube(self.project0(m), self.projectI(m), self.projectN(m)))
         elif is_sat == unsat:
            cube, f = self.generalize(cube, f)
+        if verbose > 1:
+            print('     is_inductive: ', cube, f, is_sat)
         return cube, f, is_sat
                         
     def run(self):
@@ -419,7 +450,8 @@ class MiniIC3:
                 print ('level: ', level)
             if is_sat == unsat:
                level += 1
-               print("### Rule: Unfold to level %d" % level)
+               if verbose > 1:
+                   print("### Rule: Unfold to level %d" % level)
                sys.stdout.flush()
                self.add_solver()
             elif is_sat == sat:

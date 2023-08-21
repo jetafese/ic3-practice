@@ -28,30 +28,43 @@ class PDR(object):
         self.primeMap = zip(literals, primes)
 
     def run(self):
-        self.R = list()
-        self.R.append(self.init)
+        s = Solver()
+        a, b = Bools('a b')
+        ap, bp = Bools('a\' b\'')
 
-        while(1==1):
-            c = self.getBadCube()
-            if(c != None):
-                print ("Found bad cube:", c)
-                # we have a bad cube, which we will try to block 
-                # if the cube is blocked from the previous frame 
-                # we can block it from all previous frames
-                trace = self.recBlockCube(c)
-                if trace != None:
-                    print ("Found trace ending in bad state:")
-                    for f in trace:
-                        print (f)
-                    return False
-            else: ## found no bad cube, add a new state on to R after checking for induction
-                print ("Checking for induction")
-                inv = self.checkForInduction()
-                if inv != None:
-                    print ("Found inductive invariant:", simplify(inv))
-                    return True
-                print ("Did not find invariant, adding frame", len(self.R))
-                self.R.append(z3.BoolVal(True))
+        # s.add(Not(a), Not(b))
+        # print(s)
+        # s.add(ap == Not(a), bp == b)
+        # print(s)
+        # s.add(bp)
+        s.add(Implies(And(Not(b), Not(a), Not(b), ap == Not(a), bp == b), Not(bp)))
+        print(s)
+        print(s.check())
+
+        # self.R = list()
+        # self.R.append(self.init)
+
+        # while(1==1):
+        #     c = self.getBadCube()
+        #     if(c != None):
+        #         print ("Found bad cube:", c)
+        #         # we have a bad cube, which we will try to block 
+        #         # if the cube is blocked from the previous frame 
+        #         # we can block it from all previous frames
+        #         trace = self.recBlockCube(c)
+        #         if trace != None:
+        #             print ("Found trace ending in bad state:")
+        #             for f in trace:
+        #                 print (f)
+        #             return False
+        #     else: ## found no bad cube, add a new state on to R after checking for induction
+        #         print ("Checking for induction")
+        #         inv = self.checkForInduction()
+        #         if inv != None:
+        #             print ("Found inductive invariant:", simplify(inv))
+        #             return True
+        #         print ("Did not find invariant, adding frame", len(self.R))
+        #         self.R.append(z3.BoolVal(True))
     
     def checkForInduction(self):
         print ('images of R: ', self.R)
@@ -142,39 +155,39 @@ class PDR(object):
 # solver = PDR(variables, primes, init, trans, post)
 # solver.run()
 
-#####
-# parity with ints
-#####
+# #####
+# # parity with ints
+# #####
 
-x, y, z = Ints('x y z')
-xp, yp, zp = Ints('x\' y\' z\'')
+# x, y, z = Ints('x y z')
+# xp, yp, zp = Ints('x\' y\' z\'')
 
-variables = [x, y, z]
-primes = [xp, yp, zp]
+# variables = [x, y, z]
+# primes = [xp, yp, zp]
 
-init = And (x ==  1, y == 1, z == 1, y % 2 == 1)
-trans = And (
-    xp == If(x % 2 == 0, x + 1, x - 1), 
-    yp == If(x % 2 == 1, y + 2, y - 2),
-    zp == z)
-post = And(y % 2 == 0)
-
-solver = PDR(variables, primes, init, trans, post)
-solver.run()
-
-# ######
-# # parity with bools
-# # x and y start as odd; x alternates; y is never even
-# ######
-# x, y = Bools('x y')
-# xp, yp = Bools('x\' y\'')
-
-# variables = [x, y]
-# primes = [xp, yp]
-
-# init = And (Not(x), Not(y))
-# trans = And (xp == Not(x), yp == y)
-# post = Not (y)
+# init = And (x ==  1, y == 1, z == 1, y % 2 == 1)
+# trans = And (
+#     xp == If(x % 2 == 0, x + 1, x - 1), 
+#     yp == If(x % 2 == 1, y + 2, y - 2),
+#     zp == z)
+# post = And(y % 2 == 0)
 
 # solver = PDR(variables, primes, init, trans, post)
 # solver.run()
+
+######
+# parity with bools
+# x and y start as odd; x alternates; y is never even
+######
+x, y = Bools('x y')
+xp, yp = Bools('x\' y\'')
+
+variables = [x, y]
+primes = [xp, yp]
+
+init = And (Not(x), Not(y))
+trans = And (xp == Not(x), yp == y)
+post = Not (y)
+
+solver = PDR(variables, primes, init, trans, post)
+solver.run()
