@@ -1,7 +1,8 @@
 ## mini_ic3 adapted from z3/examples/python
 
-from z3 import *
 import heapq
+
+from z3 import *
 
 # verbose levels #
 # 0 -> necessary output
@@ -345,7 +346,6 @@ class MiniIC3:
     def block_cube(self, i, cube):
         self.assert_clause(i, cube2clause(cube))
         if verbose > 1:
-            print('### Rule: Push ###')
             print('block_cube: ', cube, ', until frame: ', i)
             print('     states: ', [x.R for x in self.states])
 
@@ -387,6 +387,8 @@ class MiniIC3:
                   self.push_heap(Goal(g.cube, g.parent, f + 1))
                   print(' ### Rule: ReQueue push in unsat (c, p, l): ', g.cube, g.parent, f + 1)
             elif is_sat == sat:
+               if verbose > 1:
+                    print ('*** Adding predecessor to the queue ***')
                print(' push in sat (c, p, l): ', cube, g, f - 1)
                self.push_heap(Goal(cube, g, f - 1))
                self.push_heap(g)
@@ -405,9 +407,9 @@ class MiniIC3:
         if unsat == s.check(cube):
             core = s.unsat_core()
             if not check_disjoint(self.init, self.prev(And(core))):
+                if verbose > 1:
+                    print ('*** Inductive Generalization ***')
                 return core, f
-        if verbose > 1:
-            print ('### Rule: New Lemma with cube : ', cube)
         return cube, f
 
     # Check if the negation of cube is inductive at level f
@@ -429,8 +431,12 @@ class MiniIC3:
            m = s.model()
         s.pop()
         if is_sat == sat:
-           cube = self.next(self.minimize_cube(self.project0(m), self.projectI(m), self.projectN(m)))
+            if verbose > 1:
+                print('### Rule: Predecessor ###')
+            cube = self.next(self.minimize_cube(self.project0(m), self.projectI(m), self.projectN(m)))
         elif is_sat == unsat:
+            if verbose > 1:
+                print ('### Rule: New Lemma with cube : ', cube)
            cube, f = self.generalize(cube, f)
         if verbose > 1:
             print('     is_inductive: ', cube, f, is_sat)
